@@ -3,15 +3,18 @@ from pymongo import MongoClient
 
 from utils import get_environment_variable
 from tasks import add as add_task
+from routers import offer_router
 
 app = FastAPI()
 mongodb_url = get_environment_variable('MONGODB_URL')
 mongodb_db_name = get_environment_variable('MONGO_INITDB_DATABASE')
 
+app.include_router(offer_router, tags=['offers'], prefix='/offers')
+
 
 @app.on_event('startup')
 def startup_db_client():
-    app.mongodb_client = MongoClient(mongodb_url)
+    app.mongodb_client = MongoClient(mongodb_url, uuidRepresentation='standard')
     app.database = app.mongodb_client[mongodb_db_name]
 
 
