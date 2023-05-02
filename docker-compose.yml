@@ -13,8 +13,11 @@ services:
     environment:
       - REDIS_BROKER_URL=${REDIS_BROKER_URL}
       - REDIS_RESULT_BACKEND=${REDIS_RESULT_BACKEND}
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
     depends_on:
       - redis
+      - mongodb
 
   redis:
     container_name: offer-api-redis
@@ -32,3 +35,15 @@ services:
       - REDIS_RESULT_BACKEND=${REDIS_RESULT_BACKEND}
     depends_on:
       - redis
+
+  mongodb:
+    container_name: offer-api-mongodb
+    image: mongo:5
+    ports:
+      - "${MONGODB_EXT_PORT}:${MONGODB_INT_PORT}"
+    environment:
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+    command:
+      mongod --quiet
