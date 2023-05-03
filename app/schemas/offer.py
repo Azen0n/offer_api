@@ -4,6 +4,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from schemas.product import Product
+
 
 class OfferStatus(str, Enum):
     ACTIVE = 'Активная'
@@ -14,7 +16,7 @@ class OfferStatus(str, Enum):
 class Offer(BaseModel):
     """Акция на товар."""
     id: str = Field(default_factory=uuid.uuid4, alias='_id')
-    compatible_products: dict = Field(..., description='Совместимые по параметрам товары')
+    compatible_products: list[Product] = Field(..., description='Совместимые по параметрам товары')
     status: OfferStatus = Field(
         ...,
         description=f'Статус акции ({"/".join([s.value.lower() for s in list(OfferStatus)])})'

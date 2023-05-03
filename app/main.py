@@ -3,13 +3,14 @@ from pymongo import MongoClient
 
 from utils import get_environment_variable
 from tasks import add as add_task
-from routers import offer_router
+from routers import offer_router, approval_process_router
 
 app = FastAPI()
 MONGODB_URL = get_environment_variable('MONGODB_URL')
 MONGO_INITDB_DATABASE = get_environment_variable('MONGO_INITDB_DATABASE')
 
 app.include_router(offer_router, tags=['offers'], prefix='/offers')
+app.include_router(approval_process_router, tags=['approval_processes'], prefix='/approval_processes')
 
 
 @app.on_event('startup')

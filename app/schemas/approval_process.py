@@ -4,6 +4,8 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 from .offer import Offer
+from .product import Product
+from .sale import Sale
 
 
 class ApprovalProcessStatus(str, Enum):
@@ -20,9 +22,9 @@ class ApprovalProcess(BaseModel):
         ...,
         description=f'Статус согласования ({"/".join([s.value.lower() for s in list(ApprovalProcessStatus)])})'
     )
-    product: dict = Field(..., description='Товар')
+    product: Product = Field(..., description='Товар')
     offers: list[Offer] = Field(..., description='Применяемые к товару акции')
-    sale: dict = Field(..., description='Продажа')
+    sale: Sale = Field(..., description='ID продажи')
 
     class Config:
         allow_population_by_field_name = True
