@@ -5,7 +5,7 @@ from pymongo import ReturnDocument
 from starlette.status import HTTP_404_NOT_FOUND
 
 from auth import get_api_key
-from schemas import ApprovalProcess, ApprovalProcessStatus
+from schemas import ApprovalProcess, ApprovalProcessStatus, Offer
 
 router = APIRouter()
 
@@ -77,3 +77,19 @@ def change_approval_process_status(
         return_document=ReturnDocument.AFTER
     )
     return updated_approval_process
+
+
+@router.get(
+    '/{sale_id}/offers',
+    response_model=list[Offer]
+)
+def get_approval_process_offers(
+        request: Request,
+        sale_id: str,
+        api_key: APIKey = Depends(get_api_key)
+):
+    """Получение списка применённых акций к товару (продажа зафиксирована)."""
+    approval_process = request.app.database['approval_processes'].find_one({'sale._id': sale_id})
+    if approval_process['status'] != ApprovalProcessStatus.APPROVED.value:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail='Продажа товара не зафиксирована')
+    return approval_process['offers']
