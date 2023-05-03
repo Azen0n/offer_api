@@ -18,10 +18,7 @@ class ApprovalProcessStatus(str, Enum):
 class ApprovalProcess(BaseModel):
     """Процесс согласования акционной продажи."""
     id: str = Field(default_factory=uuid.uuid4, alias='_id')
-    status: ApprovalProcessStatus = Field(
-        ...,
-        description=f'Статус согласования ({"/".join([s.value.lower() for s in list(ApprovalProcessStatus)])})'
-    )
+    status: ApprovalProcessStatus = Field(..., description=f'Статус согласования')
     product: Product = Field(..., description='Товар')
     offers: list[Offer] = Field(..., description='Применяемые к товару акции')
     sale: Sale = Field(..., description='ID продажи')
