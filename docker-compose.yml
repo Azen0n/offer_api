@@ -35,6 +35,8 @@ services:
     environment:
       - REDIS_BROKER_URL=${REDIS_BROKER_URL}
       - REDIS_RESULT_BACKEND=${REDIS_RESULT_BACKEND}
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
     depends_on:
       - redis
 
