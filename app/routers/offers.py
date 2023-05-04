@@ -4,7 +4,7 @@ from fastapi.openapi.models import APIKey
 
 from auth import get_api_key
 from schemas import Offer
-from tasks import get_offers_task, create_offer_task, update_offer_task
+from tasks.offer_tasks import get_offers_task, create_offer_task, update_offer_task
 
 router = APIRouter()
 
