@@ -8,4 +8,4 @@ REDIS_RESULT_BACKEND = get_environment_variable('REDIS_RESULT_BACKEND')
 app = Celery('celery_app',
              broker=REDIS_BROKER_URL,
              backend=REDIS_RESULT_BACKEND,
-             include=['tasks.offer_tasks'])
+             include=['tasks.offer_tasks', 'tasks.approval_process_tasks'])

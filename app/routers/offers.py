@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Body, Request, status, Depends
+from fastapi import APIRouter, Body, Request, status, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.openapi.models import APIKey
+from starlette.status import HTTP_404_NOT_FOUND
 
 from auth import get_api_key
 from schemas import Offer
@@ -41,4 +42,7 @@ async def update_offer(
     """Изменение акции."""
     offer = jsonable_encoder(offer)
     task = update_offer_task.delay(offer_id, offer)
-    return task.get()
+    updated_offer = task.get()
+    if updated_offer == HTTP_404_NOT_FOUND:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail='Акция не найдена')
+    return updated_offer

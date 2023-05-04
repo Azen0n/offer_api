@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Body, Request, status, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.openapi.models import APIKey
-from pymongo import ReturnDocument
-from starlette.status import HTTP_404_NOT_FOUND
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from auth import get_api_key
 from schemas import ApprovalProcess, ApprovalProcessStatus, Offer
+from tasks.approval_process_tasks import (
+    create_approval_process_task, get_approval_process_status_task,
+    get_approval_processes_task, change_approval_process_status_task,
+    get_approval_process_offers_task,
+)
 
 router = APIRouter()
 
@@ -22,28 +26,30 @@ def create_approval_process(
 ):
     """Добавление процесса согласования акционной продажи."""
     approval_process = jsonable_encoder(approval_process)
-    new_approval_process = request.app.database['approval_processes'].insert_one(approval_process)
-    created_approval_process = request.app.database['approval_processes'].find_one(
-        {'_id': new_approval_process.inserted_id}
-    )
-    return created_approval_process
+    task = create_approval_process_task.delay(approval_process)
+    return task.get()
 
 
-@router.get('/{sale_id}/status')
+@router.get(
+    '/{sale_id}/status',
+    status_code=status.HTTP_200_OK,
+)
 def get_approval_process_status(
         request: Request,
         sale_id: str,
         api_key: APIKey = Depends(get_api_key)
 ):
     """Получение статуса процесса согласования акционной продажи по ID продажи."""
-    approval_process = request.app.database['approval_processes'].find_one({'sale._id': sale_id})
-    if approval_process:
-        return {'status': approval_process['status']}
-    raise HTTPException(status_code=HTTP_404_NOT_FOUND)
+    task = get_approval_process_status_task.delay(sale_id)
+    approval_process = task.get()
+    if approval_process == HTTP_404_NOT_FOUND:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail='Процесс согласования не найден')
+    return approval_process
 
 
 @router.get(
     '/',
+    status_code=status.HTTP_200_OK,
     response_model=list[ApprovalProcess]
 )
 def get_approval_processes(
@@ -51,14 +57,13 @@ def get_approval_processes(
         api_key: APIKey = Depends(get_api_key)
 ):
     """Получение списка процессов согласования акционных продаж, требующих решения."""
-    approval_processes = list(request.app.database['approval_processes'].find(
-        {'status': ApprovalProcessStatus.PENDING.value})
-    )
-    return approval_processes
+    task = get_approval_processes_task.delay()
+    return task.get()
 
 
 @router.patch(
     '/{sale_id}/status',
+    status_code=status.HTTP_200_OK,
     response_model=ApprovalProcess
 )
 def change_approval_process_status(
@@ -68,19 +73,16 @@ def change_approval_process_status(
         api_key: APIKey = Depends(get_api_key)
 ):
     """Изменение статуса процесса согласования акционной продажи по ID продажи."""
-    approval_process = request.app.database['approval_processes'].find_one({'sale._id': sale_id})
-    if not approval_process:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-    updated_approval_process = request.app.database['approval_processes'].find_one_and_update(
-        {'_id': approval_process['_id']},
-        {'$set': {'status': approval_process_status.value}},
-        return_document=ReturnDocument.AFTER
-    )
+    task = change_approval_process_status_task.delay(sale_id, approval_process_status)
+    updated_approval_process = task.get()
+    if updated_approval_process == HTTP_404_NOT_FOUND:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail='Процесс согласования не найден')
     return updated_approval_process
 
 
 @router.get(
     '/{sale_id}/offers',
+    status_code=status.HTTP_200_OK,
     response_model=list[Offer]
 )
 def get_approval_process_offers(
@@ -89,7 +91,10 @@ def get_approval_process_offers(
         api_key: APIKey = Depends(get_api_key)
 ):
     """Получение списка применённых акций к товару (продажа зафиксирована)."""
-    approval_process = request.app.database['approval_processes'].find_one({'sale._id': sale_id})
-    if approval_process['status'] != ApprovalProcessStatus.APPROVED.value:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail='Продажа товара не зафиксирована')
-    return approval_process['offers']
+    task = get_approval_process_offers_task.delay(sale_id)
+    approval_process_offers = task.get()
+    if approval_process_offers == HTTP_404_NOT_FOUND:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail='Процесс согласования не найден')
+    if approval_process_offers == HTTP_422_UNPROCESSABLE_ENTITY:
+        raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail='Продажа товара не зафиксирована')
+    return approval_process_offers
