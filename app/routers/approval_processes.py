@@ -1,9 +1,6 @@
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
-from starlette.status import (
-    HTTP_201_CREATED, HTTP_200_OK, HTTP_404_NOT_FOUND,
-    HTTP_422_UNPROCESSABLE_ENTITY
-)
+from starlette.status import HTTP_201_CREATED, HTTP_200_OK
 
 from auth import get_api_key
 from schemas import ApprovalProcess, ApprovalProcessStatus
@@ -32,7 +29,10 @@ async def create_approval_process(
     """Добавление процесса согласования акционной продажи."""
     approval_process = jsonable_encoder(approval_process)
     task = create_approval_process_task.delay(approval_process)
-    return task.get()
+    approval_process, error = task.get()
+    if approval_process is None:
+        raise HTTPException(**error)
+    return approval_process
 
 
 @router.get(
@@ -44,12 +44,9 @@ async def get_approval_process_status(
 ):
     """Получение статуса процесса согласования акционной продажи по ID продажи."""
     task = get_approval_process_status_task.delay(sale_id)
-    approval_process = task.get()
-    if approval_process == HTTP_404_NOT_FOUND:
-        raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND,
-            detail='Процесс согласования не найден'
-        )
+    approval_process, error = task.get()
+    if approval_process is None:
+        raise HTTPException(**error)
     return approval_process
 
 
@@ -75,12 +72,9 @@ async def change_approval_process_status(
 ):
     """Изменение статуса процесса согласования акционной продажи по ID продажи."""
     task = change_approval_process_status_task.delay(sale_id, approval_process_status)
-    updated_approval_process = task.get()
-    if updated_approval_process == HTTP_404_NOT_FOUND:
-        raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND,
-            detail='Процесс согласования не найден'
-        )
+    updated_approval_process, error = task.get()
+    if updated_approval_process is None:
+        raise HTTPException(**error)
     return updated_approval_process
 
 
@@ -94,15 +88,7 @@ async def get_approval_process_offers(
 ):
     """Получение списка применённых акций к товару (продажа зафиксирована)."""
     task = get_approval_process_offers_task.delay(sale_id)
-    approval_process_offers = task.get()
-    if approval_process_offers == HTTP_404_NOT_FOUND:
-        raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND,
-            detail='Процесс согласования не найден'
-        )
-    if approval_process_offers == HTTP_422_UNPROCESSABLE_ENTITY:
-        raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail='Продажа товара не зафиксирована'
-        )
+    approval_process_offers, error = task.get()
+    if approval_process_offers is None:
+        raise HTTPException(**error)
     return approval_process_offers
