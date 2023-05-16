@@ -1,61 +1,61 @@
-from fastapi import APIRouter, Body, Request, status, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
-from fastapi.openapi.models import APIKey
-from pymongo import ReturnDocument
+from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_404_NOT_FOUND
 
 from auth import get_api_key
-from schemas import Offer, OfferStatus
+from schemas import Offer
+from tasks.offer_tasks import (
+    get_offers_task, create_offer_task, update_offer_task
+)
 
-router = APIRouter()
+router = APIRouter(
+    tags=['offers'],
+    prefix='/offers',
+    dependencies=[Depends(get_api_key)]
+)
 
 
 @router.get(
     '/',
+    status_code=HTTP_200_OK,
     response_model=list[Offer]
 )
-def get_offers(
-        request: Request,
-        api_key: APIKey = Depends(get_api_key)
-):
+async def get_offers():
     """Получение списка активных акций."""
-    offers = list(request.app.database['offers'].find({'status': OfferStatus.ACTIVE.value}))
-    return offers
+    task = get_offers_task.delay()
+    return task.get()
 
 
 @router.post(
     '/',
-    status_code=status.HTTP_201_CREATED,
+    status_code=HTTP_201_CREATED,
     response_model=Offer
 )
-def create_offer(
-        request: Request,
-        offer: Offer = Body(...),
-        api_key: APIKey = Depends(get_api_key)
+async def create_offer(
+        offer: Offer = Body(...)
 ):
     """Добавление акции."""
     offer = jsonable_encoder(offer)
-    new_offer = request.app.database['offers'].insert_one(offer)
-    created_offer = request.app.database['offers'].find_one(
-        {'_id': new_offer.inserted_id}
-    )
-    return created_offer
+    task = create_offer_task.delay(offer)
+    return task.get()
 
 
 @router.put(
     '/{offer_id}',
-    status_code=status.HTTP_200_OK,
+    status_code=HTTP_200_OK,
     response_model=Offer
 )
-def update_offer(
-        request: Request,
+async def update_offer(
         offer_id: str,
-        offer: Offer = Body(...),
-        api_key: APIKey = Depends(get_api_key)
+        offer: Offer = Body(...)
 ):
     """Изменение акции."""
-    updated_offer = request.app.database['offers'].find_one_and_update(
-        {'_id': offer_id},
-        {'$set': offer.dict()},
-        return_document=ReturnDocument.AFTER
-    )
+    offer = jsonable_encoder(offer)
+    task = update_offer_task.delay(offer_id, offer)
+    updated_offer = task.get()
+    if updated_offer == HTTP_404_NOT_FOUND:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail='Акция не найдена'
+        )
     return updated_offer
