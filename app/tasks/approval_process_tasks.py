@@ -21,7 +21,7 @@ def create_approval_process_task(approval_process: dict) -> dict:
 
 
 @app.task
-def get_approval_process_status_task(sale_id: str) -> dict | int:
+def get_approval_process_status_task(sale_id: int) -> dict | int:
     """Получение статуса процесса согласования акционной продажи по ID продажи.
 
     Возвращает ApprovalProcessStatus в виде словаря или код состояния 404,
@@ -47,7 +47,7 @@ def get_approval_processes_task() -> list[dict]:
 
 @app.task
 def change_approval_process_status_task(
-        sale_id: str,
+        sale_id: int,
         approval_process_status: str
 ) -> dict | int:
     """Изменение статуса процесса согласования акционной продажи по ID продажи.
@@ -67,7 +67,7 @@ def change_approval_process_status_task(
 
 
 @app.task
-def get_approval_process_offers_task(sale_id: str) -> list[dict] | int:
+def get_approval_process_offers_task(sale_id: int) -> list[dict] | int:
     """Получение списка применённых акций к товару (продажа зафиксирована)
     по ID продажи.
 

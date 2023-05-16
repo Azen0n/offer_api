@@ -1,10 +1,11 @@
-import uuid
 from enum import Enum
 
+from bson import ObjectId
 from pydantic import BaseModel, Field
 
-from .offer import Offer
+from .offer import OfferId
 from .product import Product
+from .pyobjectid import PyObjectId
 from .sale import Sale
 
 
@@ -17,11 +18,12 @@ class ApprovalProcessStatus(str, Enum):
 
 class ApprovalProcess(BaseModel):
     """Процесс согласования акционной продажи."""
-    id: str = Field(default_factory=uuid.uuid4, alias='_id')
+    id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
     status: ApprovalProcessStatus = Field(..., description=f'Статус согласования')
     product: Product = Field(..., description='Товар')
-    offers: list[Offer] = Field(..., description='Применяемые к товару акции')
+    offers: list[OfferId] = Field(..., description='Применяемые к товару акции')
     sale: Sale = Field(..., description='ID продажи')
 
     class Config:
+        json_encoders = {ObjectId: str}
         allow_population_by_field_name = True

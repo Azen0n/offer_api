@@ -6,7 +6,8 @@ from starlette.status import (
 )
 
 from auth import get_api_key
-from schemas import ApprovalProcess, ApprovalProcessStatus, Offer
+from schemas import ApprovalProcess, ApprovalProcessStatus
+from schemas.offer import OfferId
 from tasks.approval_process_tasks import (
     create_approval_process_task, get_approval_process_status_task,
     get_approval_processes_task, change_approval_process_status_task,
@@ -39,7 +40,7 @@ async def create_approval_process(
     status_code=HTTP_200_OK
 )
 async def get_approval_process_status(
-        sale_id: str
+        sale_id: int
 ):
     """Получение статуса процесса согласования акционной продажи по ID продажи."""
     task = get_approval_process_status_task.delay(sale_id)
@@ -69,7 +70,7 @@ async def get_approval_processes():
     response_model=ApprovalProcess
 )
 async def change_approval_process_status(
-        sale_id: str,
+        sale_id: int,
         approval_process_status: ApprovalProcessStatus = Body(...),
 ):
     """Изменение статуса процесса согласования акционной продажи по ID продажи."""
@@ -86,10 +87,10 @@ async def change_approval_process_status(
 @router.get(
     '/{sale_id}/offers',
     status_code=HTTP_200_OK,
-    response_model=list[Offer]
+    response_model=list[OfferId]
 )
 async def get_approval_process_offers(
-        sale_id: str
+        sale_id: int
 ):
     """Получение списка применённых акций к товару (продажа зафиксирована)."""
     task = get_approval_process_offers_task.delay(sale_id)
