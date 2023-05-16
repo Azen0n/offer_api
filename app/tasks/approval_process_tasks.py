@@ -80,4 +80,6 @@ def get_approval_process_offers_task(sale_id: int) -> list[dict] | int:
         return HTTP_404_NOT_FOUND
     if approval_process['status'] != ApprovalProcessStatus.APPROVED.value:
         return HTTP_422_UNPROCESSABLE_ENTITY
-    return approval_process['offers']
+    offer_ids = [offer['_id'] for offer in approval_process['offers']]
+    approval_process_offers = list(db['offers'].find({'_id': {'$in': offer_ids}}))
+    return approval_process_offers
