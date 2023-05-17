@@ -1,4 +1,5 @@
 from database import db
+from schemas.product import Product
 
 
 def offers_exists(offer_ids: list[str]) -> bool:
@@ -16,3 +17,9 @@ def product_exists(product_id: int) -> bool:
 def sale_exists(sale_id: int) -> bool:
     """Возвращает True, если продажа с указанным Id существует."""
     return db['sales'].find_one({'_id': sale_id}) is not None
+
+
+def find_compatible_products() -> list[Product]:
+    """Возвращает совместимые по параметрам товары."""
+    compatible_products = []
+    return compatible_products
