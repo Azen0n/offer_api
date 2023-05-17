@@ -27,3 +27,14 @@ class ApprovalProcess(BaseModel):
     class Config:
         json_encoders = {ObjectId: str}
         allow_population_by_field_name = True
+
+
+class CreateApprovalProcess(BaseModel):
+    """Схема создания процесса согласования акционной продажи."""
+    status: ApprovalProcessStatus = Field(..., description=f'Статус согласования')
+    product: Product = Field(..., description='Товар')
+    offers: list[OfferId] = Field(..., description='Применяемые к товару акции')
+    sale: Sale = Field(..., description='ID продажи')
+
+    class Config:
+        json_encoders = {ObjectId: str}

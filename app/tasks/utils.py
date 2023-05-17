@@ -1,11 +1,13 @@
+from bson import ObjectId
+
 from database import db
 from schemas.product import Product
 
 
-def offers_exists(offer_ids: list[str]) -> bool:
+def offers_exists(offer_ids: list[ObjectId]) -> bool:
     """Возвращает True, если все акции с указанными Id существуют."""
     offers = list(db['offers'].find({'_id': {'$in': offer_ids}}))
-    offers_found = {offer['_id'] for offer in offers}
+    offers_found = {ObjectId(offer['_id']) for offer in offers}
     return set(offer_ids) == offers_found
 
 

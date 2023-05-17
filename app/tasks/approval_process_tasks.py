@@ -1,3 +1,4 @@
+from bson import ObjectId
 from pymongo import ReturnDocument
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -21,6 +22,8 @@ def create_approval_process_task(approval_process: dict) -> tuple[dict | None, d
     if not sale_exists(approval_process['sale']['_id']):
         return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
                       'detail': 'Продажа не найдена'}
+    for offer in approval_process['offers']:
+        offer['_id'] = ObjectId(offer['_id'])
     offer_ids = [offer['_id'] for offer in approval_process['offers']]
     if not offers_exists(offer_ids):
         return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
@@ -29,6 +32,9 @@ def create_approval_process_task(approval_process: dict) -> tuple[dict | None, d
     created_approval_process = db['approval_processes'].find_one(
         {'_id': new_approval_process.inserted_id}
     )
+    created_approval_process['_id'] = str(created_approval_process['_id'])
+    for offer in created_approval_process['offers']:
+        offer['_id'] = str(offer['_id'])
     return created_approval_process, None
 
 
@@ -55,6 +61,10 @@ def get_approval_processes_task() -> list[dict]:
     approval_processes = list(db['approval_processes'].find(
         {'status': ApprovalProcessStatus.PENDING.value})
     )
+    for approval_process in approval_processes:
+        approval_process['_id'] = str(approval_process['_id'])
+        for offer in approval_process['offers']:
+            offer['_id'] = str(offer['_id'])
     return approval_processes
 
 
@@ -73,10 +83,13 @@ def change_approval_process_status_task(
         return None, {'status_code': HTTP_404_NOT_FOUND,
                       'detail': 'Процесс согласования не найден'}
     updated_approval_process = db['approval_processes'].find_one_and_update(
-        {'_id': approval_process['_id']},
+        {'_id': ObjectId(approval_process['_id'])},
         {'$set': {'status': approval_process_status}},
         return_document=ReturnDocument.AFTER
     )
+    updated_approval_process['_id'] = str(updated_approval_process['_id'])
+    for offer in updated_approval_process['offers']:
+        offer['_id'] = str(offer['_id'])
     return updated_approval_process, None
 
 
@@ -95,6 +108,8 @@ def get_approval_process_offers_task(sale_id: int) -> tuple[list[dict] | None, d
     if approval_process['status'] != ApprovalProcessStatus.APPROVED.value:
         return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
                       'detail': 'Продажа товара не зафиксирована'}
-    offer_ids = [offer['_id'] for offer in approval_process['offers']]
+    offer_ids = [ObjectId(offer['_id']) for offer in approval_process['offers']]
     approval_process_offers = list(db['offers'].find({'_id': {'$in': offer_ids}}))
+    for offer in approval_process_offers:
+        offer['_id'] = str(offer['_id'])
     return approval_process_offers, None

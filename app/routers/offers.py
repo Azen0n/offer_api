@@ -3,7 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED
 
 from schemas import Offer
-from schemas.offer import CreateOffer
+from schemas.offer import WriteOffer
 from tasks.offer_tasks import (
     get_offers_task, create_offer_task, update_offer_task
 )
@@ -28,7 +28,7 @@ async def get_offers():
     response_model=Offer
 )
 async def create_offer(
-        offer: CreateOffer = Body(...)
+        offer: WriteOffer = Body(...)
 ):
     """Добавление акции."""
     offer = jsonable_encoder(offer)
@@ -43,7 +43,7 @@ async def create_offer(
 )
 async def update_offer(
         offer_id: str,
-        offer: Offer = Body(...)
+        offer: WriteOffer = Body(...)
 ):
     """Изменение акции."""
     offer = jsonable_encoder(offer)

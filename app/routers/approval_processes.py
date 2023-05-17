@@ -3,6 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_201_CREATED, HTTP_200_OK
 
 from schemas import ApprovalProcess, ApprovalProcessStatus
+from schemas.approval_process import CreateApprovalProcess
 from schemas.offer import Offer
 from tasks.approval_process_tasks import (
     create_approval_process_task, get_approval_process_status_task,
@@ -19,7 +20,7 @@ router = APIRouter()
     response_model=ApprovalProcess
 )
 async def create_approval_process(
-        approval_process: ApprovalProcess = Body(...)
+        approval_process: CreateApprovalProcess = Body(...)
 ):
     """Добавление процесса согласования акционной продажи."""
     approval_process = jsonable_encoder(approval_process)
