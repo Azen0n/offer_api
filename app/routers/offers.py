@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
-from starlette.status import HTTP_200_OK, HTTP_201_CREATED, HTTP_404_NOT_FOUND
+from starlette.status import HTTP_200_OK, HTTP_201_CREATED
 
 from auth import get_api_key
 from schemas import Offer
+from schemas.offer import CreateOffer
 from tasks.offer_tasks import (
     get_offers_task, create_offer_task, update_offer_task
 )
@@ -32,7 +33,7 @@ async def get_offers():
     response_model=Offer
 )
 async def create_offer(
-        offer: Offer = Body(...)
+        offer: CreateOffer = Body(...)
 ):
     """Добавление акции."""
     offer = jsonable_encoder(offer)
@@ -52,10 +53,7 @@ async def update_offer(
     """Изменение акции."""
     offer = jsonable_encoder(offer)
     task = update_offer_task.delay(offer_id, offer)
-    updated_offer = task.get()
-    if updated_offer == HTTP_404_NOT_FOUND:
-        raise HTTPException(
-            status_code=HTTP_404_NOT_FOUND,
-            detail='Акция не найдена'
-        )
+    updated_offer, error = task.get()
+    if updated_offer is None:
+        raise HTTPException(**error)
     return updated_offer
