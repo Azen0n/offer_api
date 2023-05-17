@@ -8,7 +8,7 @@ from database import db
 from tasks.utils import find_compatible_products
 
 
-@app.task
+@app.task(name='get_offers')
 def get_offers_task() -> list[dict]:
     """Получение списка активных акций.
 
@@ -18,7 +18,7 @@ def get_offers_task() -> list[dict]:
     return offers
 
 
-@app.task
+@app.task(name='create_offer')
 def create_offer_task(offer: dict) -> dict:
     """Добавление акции.
 
@@ -32,7 +32,7 @@ def create_offer_task(offer: dict) -> dict:
     return created_offer
 
 
-@app.task
+@app.task(name='update_offer')
 def update_offer_task(offer_id: str, offer: dict) -> tuple[dict | None, dict | None]:
     """Изменение акции.
 

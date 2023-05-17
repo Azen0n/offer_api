@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_201_CREATED, HTTP_200_OK
 
-from auth import get_api_key
 from schemas import ApprovalProcess, ApprovalProcessStatus
 from schemas.offer import Offer
 from tasks.approval_process_tasks import (
@@ -11,11 +10,7 @@ from tasks.approval_process_tasks import (
     get_approval_process_offers_task,
 )
 
-router = APIRouter(
-    tags=['approval_processes'],
-    prefix='/approval_processes',
-    dependencies=[Depends(get_api_key)]
-)
+router = APIRouter()
 
 
 @router.post(

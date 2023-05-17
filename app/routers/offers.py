@@ -1,19 +1,14 @@
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED
 
-from auth import get_api_key
 from schemas import Offer
 from schemas.offer import CreateOffer
 from tasks.offer_tasks import (
     get_offers_task, create_offer_task, update_offer_task
 )
 
-router = APIRouter(
-    tags=['offers'],
-    prefix='/offers',
-    dependencies=[Depends(get_api_key)]
-)
+router = APIRouter()
 
 
 @router.get(

@@ -8,7 +8,7 @@ from schemas import ApprovalProcessStatus
 from tasks.utils import product_exists, sale_exists, offers_exists
 
 
-@app.task
+@app.task(name='create_approval_process')
 def create_approval_process_task(approval_process: dict) -> tuple[dict | None, dict | None]:
     """Добавление процесса согласования акционной продажи.
 
@@ -32,7 +32,7 @@ def create_approval_process_task(approval_process: dict) -> tuple[dict | None, d
     return created_approval_process, None
 
 
-@app.task
+@app.task(name='get_approval_process_status')
 def get_approval_process_status_task(sale_id: int) -> tuple[dict | None, dict | None]:
     """Получение статуса процесса согласования акционной продажи по ID продажи.
 
@@ -46,7 +46,7 @@ def get_approval_process_status_task(sale_id: int) -> tuple[dict | None, dict | 
     return {'status': approval_process['status']}, None
 
 
-@app.task
+@app.task(name='get_approval_processes')
 def get_approval_processes_task() -> list[dict]:
     """Получение списка процессов согласования акционных продаж, требующих решения.
 
@@ -58,7 +58,7 @@ def get_approval_processes_task() -> list[dict]:
     return approval_processes
 
 
-@app.task
+@app.task(name='change_approval_process_status')
 def change_approval_process_status_task(
         sale_id: int,
         approval_process_status: str
@@ -80,7 +80,7 @@ def change_approval_process_status_task(
     return updated_approval_process, None
 
 
-@app.task
+@app.task(name='get_approval_process_offers')
 def get_approval_process_offers_task(sale_id: int) -> tuple[list[dict] | None, dict | None]:
     """Получение списка применённых акций к товару (продажа зафиксирована)
     по ID продажи.
