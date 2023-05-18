@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_201_CREATED, HTTP_200_OK
@@ -12,6 +14,7 @@ from tasks.approval_process_tasks import (
     get_approval_process_offers_task,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -24,10 +27,13 @@ async def create_approval_process(
         approval_process: CreateApprovalProcess = Body(...)
 ):
     """Добавление процесса согласования акционной продажи."""
+    logger.info(f'Поступил запрос на {create_approval_process.__name__},'
+                 f' {approval_process=}')
     approval_process = jsonable_encoder(approval_process)
     task = create_approval_process_task.delay(approval_process)
     approval_process, error = task.get()
     if approval_process is None:
+        logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)
     return approval_process
 
@@ -42,11 +48,14 @@ async def get_approval_process_status(
     """Получение статуса процесса согласования акционной продажи
     по ID продажи.
     """
+    logger.info(f'Поступил запрос на {get_approval_process_status.__name__},'
+                 f' {sale_id=}')
     approval_process, error = get_task_result_or_timeout(
         get_approval_process_status_task,
     sale_id
     )
     if approval_process is None:
+        logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)
     return approval_process
 
@@ -60,10 +69,12 @@ async def get_approval_processes():
     """Получение списка процессов согласования акционных продаж,
     требующих решения.
     """
+    logger.info(f'Поступил запрос на {get_approval_processes.__name__}')
     approval_processes, error = get_task_result_or_timeout(
         get_approval_processes_task
     )
     if approval_processes is None:
+        logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)
     return approval_processes
 
@@ -80,12 +91,15 @@ async def change_approval_process_status(
     """Изменение статуса процесса согласования акционной продажи
     по ID продажи.
     """
+    logger.info(f'Поступил запрос на {change_approval_process_status.__name__},'
+                 f' {sale_id=}, {approval_process_status=}')
     updated_approval_process, error = get_task_result_or_timeout(
         change_approval_process_status_task,
         sale_id,
         approval_process_status
     )
     if updated_approval_process is None:
+        logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)
     return updated_approval_process
 
@@ -99,10 +113,13 @@ async def get_approval_process_offers(
         sale_id: int
 ):
     """Получение списка применённых акций к товару (продажа зафиксирована)."""
+    logger.info(f'Поступил запрос на {get_approval_process_offers.__name__},'
+                f' {sale_id=}')
     approval_process_offers, error = get_task_result_or_timeout(
         get_approval_process_offers_task,
         sale_id
     )
     if approval_process_offers is None:
+        logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)
     return approval_process_offers

@@ -1,4 +1,4 @@
-import time
+import logging
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -11,6 +11,7 @@ from tasks.offer_tasks import (
     get_offers_task, create_offer_task, update_offer_task
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -21,8 +22,10 @@ router = APIRouter()
 )
 async def get_offers():
     """Получение списка активных акций."""
+    logger.info(f'Поступил запрос на {get_offers.__name__}')
     offers, error = get_task_result_or_timeout(get_offers_task)
     if offers is None:
+        logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)
     return offers
 
@@ -36,9 +39,11 @@ async def create_offer(
         offer: WriteOffer = Body(...)
 ):
     """Добавление акции."""
+    logger.info(f'Поступил запрос на {create_offer.__name__}, {offer=}')
     offer = jsonable_encoder(offer)
     offer, error = get_task_result_or_timeout(create_offer_task, offer)
     if offer is None:
+        logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)
     return offer
 
@@ -53,6 +58,7 @@ async def update_offer(
         offer: WriteOffer = Body(...)
 ):
     """Изменение акции."""
+    logger.info(f'Поступил запрос на {update_offer.__name__}, {offer_id=}, {offer=}')
     offer = jsonable_encoder(offer)
     updated_offer, error = get_task_result_or_timeout(
         update_offer_task,
@@ -60,5 +66,6 @@ async def update_offer(
         offer
     )
     if updated_offer is None:
+        logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)
     return updated_offer
