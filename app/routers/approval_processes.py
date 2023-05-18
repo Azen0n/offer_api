@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body, HTTPException
 from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_201_CREATED, HTTP_200_OK
 
+from routers.utils import get_task_result_or_timeout
 from schemas import ApprovalProcess, ApprovalProcessStatus
 from schemas.approval_process import CreateApprovalProcess
 from schemas.offer import Offer
@@ -38,9 +39,13 @@ async def create_approval_process(
 async def get_approval_process_status(
         sale_id: int
 ):
-    """Получение статуса процесса согласования акционной продажи по ID продажи."""
-    task = get_approval_process_status_task.delay(sale_id)
-    approval_process, error = task.get()
+    """Получение статуса процесса согласования акционной продажи
+    по ID продажи.
+    """
+    approval_process, error = get_task_result_or_timeout(
+        get_approval_process_status_task,
+    sale_id
+    )
     if approval_process is None:
         raise HTTPException(**error)
     return approval_process
@@ -52,9 +57,15 @@ async def get_approval_process_status(
     response_model=list[ApprovalProcess]
 )
 async def get_approval_processes():
-    """Получение списка процессов согласования акционных продаж, требующих решения."""
-    task = get_approval_processes_task.delay()
-    return task.get()
+    """Получение списка процессов согласования акционных продаж,
+    требующих решения.
+    """
+    approval_processes, error = get_task_result_or_timeout(
+        get_approval_processes_task
+    )
+    if approval_processes is None:
+        raise HTTPException(**error)
+    return approval_processes
 
 
 @router.patch(
@@ -66,9 +77,14 @@ async def change_approval_process_status(
         sale_id: int,
         approval_process_status: ApprovalProcessStatus = Body(...),
 ):
-    """Изменение статуса процесса согласования акционной продажи по ID продажи."""
-    task = change_approval_process_status_task.delay(sale_id, approval_process_status)
-    updated_approval_process, error = task.get()
+    """Изменение статуса процесса согласования акционной продажи
+    по ID продажи.
+    """
+    updated_approval_process, error = get_task_result_or_timeout(
+        change_approval_process_status_task,
+        sale_id,
+        approval_process_status
+    )
     if updated_approval_process is None:
         raise HTTPException(**error)
     return updated_approval_process
@@ -83,8 +99,10 @@ async def get_approval_process_offers(
         sale_id: int
 ):
     """Получение списка применённых акций к товару (продажа зафиксирована)."""
-    task = get_approval_process_offers_task.delay(sale_id)
-    approval_process_offers, error = task.get()
+    approval_process_offers, error = get_task_result_or_timeout(
+        get_approval_process_offers_task,
+        sale_id
+    )
     if approval_process_offers is None:
         raise HTTPException(**error)
     return approval_process_offers

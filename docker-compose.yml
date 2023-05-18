@@ -17,6 +17,7 @@ services:
       - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
       - API_KEY_NAME=${API_KEY_NAME}
       - API_KEY=${API_KEY}
+      - TIMEOUT_SECONDS=${TIMEOUT_SECONDS}
     depends_on:
       - redis
       - mongodb
@@ -37,6 +38,7 @@ services:
       - REDIS_RESULT_BACKEND=${REDIS_RESULT_BACKEND}
       - MONGODB_URL=${MONGODB_URL}
       - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+      - TIMEOUT_SECONDS=${TIMEOUT_SECONDS}
     depends_on:
       - redis
 

@@ -1,10 +1,11 @@
 from bson import ObjectId
 from pymongo import ReturnDocument
+from pymongo.errors import ConnectionFailure
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from celery_app import app
+from database import MongoConnection, MONGODB_URL, MONGO_INITDB_DATABASE
 
-from database import db
 from schemas import ApprovalProcessStatus
 from tasks.utils import product_exists, sale_exists, offers_exists
 
@@ -16,26 +17,30 @@ def create_approval_process_task(approval_process: dict) -> tuple[dict | None, d
     Возвращает ApprovalProcess в виде словаря и словарь
     с кодом ошибки и описанием. При отсутствии один из элементов равен None.
     """
-    if not product_exists(approval_process['product']['_id']):
-        return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                      'detail': 'Товар не найден'}
-    if not sale_exists(approval_process['sale']['_id']):
-        return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                      'detail': 'Продажа не найдена'}
-    for offer in approval_process['offers']:
-        offer['_id'] = ObjectId(offer['_id'])
-    offer_ids = [offer['_id'] for offer in approval_process['offers']]
-    if not offers_exists(offer_ids):
-        return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                      'detail': 'Одна или более акции не существуют'}
-    new_approval_process = db['approval_processes'].insert_one(approval_process)
-    created_approval_process = db['approval_processes'].find_one(
-        {'_id': new_approval_process.inserted_id}
-    )
-    created_approval_process['_id'] = str(created_approval_process['_id'])
-    for offer in created_approval_process['offers']:
-        offer['_id'] = str(offer['_id'])
-    return created_approval_process, None
+    try:
+        with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
+            if not product_exists(mongo.db, approval_process['product']['_id']):
+                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
+                              'detail': 'Товар не найден'}
+            if not sale_exists(mongo.db, approval_process['sale']['_id']):
+                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
+                              'detail': 'Продажа не найдена'}
+            for offer in approval_process['offers']:
+                offer['_id'] = ObjectId(offer['_id'])
+            offer_ids = [offer['_id'] for offer in approval_process['offers']]
+            if not offers_exists(mongo.db, offer_ids):
+                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
+                              'detail': 'Одна или более акции не существуют'}
+            new_approval_process = mongo.db['approval_processes'].insert_one(approval_process)
+            created_approval_process = mongo.db['approval_processes'].find_one(
+                {'_id': new_approval_process.inserted_id}
+            )
+            created_approval_process['_id'] = str(created_approval_process['_id'])
+            for offer in created_approval_process['offers']:
+                offer['_id'] = str(offer['_id'])
+            return created_approval_process, None
+    except ConnectionFailure as e:
+        return None, {'status_code': 500, 'detail': f'{e}'}
 
 
 @app.task(name='get_approval_process_status')
@@ -45,27 +50,35 @@ def get_approval_process_status_task(sale_id: int) -> tuple[dict | None, dict | 
     Возвращает ApprovalProcessStatus в виде словаря и словарь
     с кодом ошибки и описанием. При отсутствии один из элементов равен None.
     """
-    approval_process = db['approval_processes'].find_one({'sale._id': sale_id})
-    if approval_process is None:
-        return None, {'status_code': HTTP_404_NOT_FOUND,
-                      'detail': 'Процесс согласования не найден'}
-    return {'status': approval_process['status']}, None
+    try:
+        with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
+            approval_process = mongo.db['approval_processes'].find_one({'sale._id': sale_id})
+            if approval_process is None:
+                return None, {'status_code': HTTP_404_NOT_FOUND,
+                              'detail': 'Процесс согласования не найден'}
+            return {'status': approval_process['status']}, None
+    except ConnectionFailure as e:
+        return None, {'status_code': 500, 'detail': f'{e}'}
 
 
 @app.task(name='get_approval_processes')
-def get_approval_processes_task() -> list[dict]:
+def get_approval_processes_task() -> tuple[list[dict] | None, dict | None]:
     """Получение списка процессов согласования акционных продаж, требующих решения.
 
     Возвращает список ApprovalProcess в виде словарей.
     """
-    approval_processes = list(db['approval_processes'].find(
-        {'status': ApprovalProcessStatus.PENDING.value})
-    )
-    for approval_process in approval_processes:
-        approval_process['_id'] = str(approval_process['_id'])
-        for offer in approval_process['offers']:
-            offer['_id'] = str(offer['_id'])
-    return approval_processes
+    try:
+        with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
+            approval_processes = list(mongo.db['approval_processes'].find(
+                {'status': ApprovalProcessStatus.PENDING.value})
+            )
+            for approval_process in approval_processes:
+                approval_process['_id'] = str(approval_process['_id'])
+                for offer in approval_process['offers']:
+                    offer['_id'] = str(offer['_id'])
+            return approval_processes, None
+    except ConnectionFailure as e:
+        return None, {'status_code': 500, 'detail': f'{e}'}
 
 
 @app.task(name='change_approval_process_status')
@@ -78,19 +91,23 @@ def change_approval_process_status_task(
     Возвращает обновленный ApprovalProcess в виде словаря и словарь
     с кодом ошибки и описанием. При отсутствии один из элементов равен None.
     """
-    approval_process = db['approval_processes'].find_one({'sale._id': sale_id})
-    if approval_process is None:
-        return None, {'status_code': HTTP_404_NOT_FOUND,
-                      'detail': 'Процесс согласования не найден'}
-    updated_approval_process = db['approval_processes'].find_one_and_update(
-        {'_id': ObjectId(approval_process['_id'])},
-        {'$set': {'status': approval_process_status}},
-        return_document=ReturnDocument.AFTER
-    )
-    updated_approval_process['_id'] = str(updated_approval_process['_id'])
-    for offer in updated_approval_process['offers']:
-        offer['_id'] = str(offer['_id'])
-    return updated_approval_process, None
+    try:
+        with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
+            approval_process = mongo.db['approval_processes'].find_one({'sale._id': sale_id})
+            if approval_process is None:
+                return None, {'status_code': HTTP_404_NOT_FOUND,
+                              'detail': 'Процесс согласования не найден'}
+            updated_approval_process = mongo.db['approval_processes'].find_one_and_update(
+                {'_id': ObjectId(approval_process['_id'])},
+                {'$set': {'status': approval_process_status}},
+                return_document=ReturnDocument.AFTER
+            )
+            updated_approval_process['_id'] = str(updated_approval_process['_id'])
+            for offer in updated_approval_process['offers']:
+                offer['_id'] = str(offer['_id'])
+            return updated_approval_process, None
+    except ConnectionFailure as e:
+        return None, {'status_code': 500, 'detail': f'{e}'}
 
 
 @app.task(name='get_approval_process_offers')
@@ -101,15 +118,19 @@ def get_approval_process_offers_task(sale_id: int) -> tuple[list[dict] | None, d
     Возвращает список Offer в виде словарей и словарь
     с кодом ошибки и описанием. При отсутствии один из элементов равен None.
     """
-    approval_process = db['approval_processes'].find_one({'sale._id': sale_id})
-    if approval_process is None:
-        return None, {'status_code': HTTP_404_NOT_FOUND,
-                      'detail': 'Процесс согласования не найден'}
-    if approval_process['status'] != ApprovalProcessStatus.APPROVED.value:
-        return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                      'detail': 'Продажа товара не зафиксирована'}
-    offer_ids = [ObjectId(offer['_id']) for offer in approval_process['offers']]
-    approval_process_offers = list(db['offers'].find({'_id': {'$in': offer_ids}}))
-    for offer in approval_process_offers:
-        offer['_id'] = str(offer['_id'])
-    return approval_process_offers, None
+    try:
+        with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
+            approval_process = mongo.db['approval_processes'].find_one({'sale._id': sale_id})
+            if approval_process is None:
+                return None, {'status_code': HTTP_404_NOT_FOUND,
+                              'detail': 'Процесс согласования не найден'}
+            if approval_process['status'] != ApprovalProcessStatus.APPROVED.value:
+                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
+                              'detail': 'Продажа товара не зафиксирована'}
+            offer_ids = [ObjectId(offer['_id']) for offer in approval_process['offers']]
+            approval_process_offers = list(mongo.db['offers'].find({'_id': {'$in': offer_ids}}))
+            for offer in approval_process_offers:
+                offer['_id'] = str(offer['_id'])
+            return approval_process_offers, None
+    except ConnectionFailure as e:
+        return None, {'status_code': 500, 'detail': f'{e}'}

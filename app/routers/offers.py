@@ -1,7 +1,10 @@
+import time
+
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_200_OK, HTTP_201_CREATED
 
+from routers.utils import get_task_result_or_timeout
 from schemas import Offer
 from schemas.offer import WriteOffer
 from tasks.offer_tasks import (
@@ -18,8 +21,10 @@ router = APIRouter()
 )
 async def get_offers():
     """Получение списка активных акций."""
-    task = get_offers_task.delay()
-    return task.get()
+    offers, error = get_task_result_or_timeout(get_offers_task)
+    if offers is None:
+        raise HTTPException(**error)
+    return offers
 
 
 @router.post(
@@ -32,8 +37,10 @@ async def create_offer(
 ):
     """Добавление акции."""
     offer = jsonable_encoder(offer)
-    task = create_offer_task.delay(offer)
-    return task.get()
+    offer, error = get_task_result_or_timeout(create_offer_task, offer)
+    if offer is None:
+        raise HTTPException(**error)
+    return offer
 
 
 @router.put(
@@ -47,8 +54,11 @@ async def update_offer(
 ):
     """Изменение акции."""
     offer = jsonable_encoder(offer)
-    task = update_offer_task.delay(offer_id, offer)
-    updated_offer, error = task.get()
+    updated_offer, error = get_task_result_or_timeout(
+        update_offer_task,
+        offer_id,
+        offer
+    )
     if updated_offer is None:
         raise HTTPException(**error)
     return updated_offer
