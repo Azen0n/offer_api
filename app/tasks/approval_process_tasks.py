@@ -7,7 +7,8 @@ from celery_app import app
 from database import MongoConnection, MONGODB_URL, MONGO_INITDB_DATABASE
 
 from schemas import ApprovalProcessStatus
-from tasks.utils import product_exists, sale_exists, offers_exists
+from tasks.utils import product_exists, sale_exists, offers_exists, change_limit_reached_offers_status_to_inactive, \
+    change_inactive_offers_status_to_active
 
 
 @app.task(name='create_approval_process')
@@ -93,19 +94,43 @@ def change_approval_process_status_task(
     """
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
-            approval_process = mongo.db['approval_processes'].find_one({'sale._id': sale_id})
-            if approval_process is None:
-                return None, {'status_code': HTTP_404_NOT_FOUND,
-                              'detail': 'Процесс согласования не найден'}
-            updated_approval_process = mongo.db['approval_processes'].find_one_and_update(
-                {'_id': ObjectId(approval_process['_id'])},
-                {'$set': {'status': approval_process_status}},
-                return_document=ReturnDocument.AFTER
-            )
-            updated_approval_process['_id'] = str(updated_approval_process['_id'])
-            for offer in updated_approval_process['offers']:
-                offer['_id'] = str(offer['_id'])
-            return updated_approval_process, None
+            with mongo.client.start_session() as session:
+                approval_process = mongo.db['approval_processes'].find_one({
+                    'sale._id': sale_id}
+                )
+                if approval_process is None:
+                    return None, {'status_code': HTTP_404_NOT_FOUND,
+                                  'detail': 'Процесс согласования не найден'}
+                updated_approval_process = mongo.db['approval_processes'].find_one_and_update(
+                    {'_id': ObjectId(approval_process['_id'])},
+                    {'$set': {'status': approval_process_status}},
+                    return_document=ReturnDocument.AFTER,
+                    session=session
+                )
+                if approval_process_status == ApprovalProcessStatus.APPROVED.value:
+                    error = change_limit_reached_offers_status_to_inactive(
+                        mongo.db,
+                        session,
+                        approval_process['offers']
+                    )
+                    if error is not None:
+                        return None, error
+                elif approval_process_status in [
+                    ApprovalProcessStatus.PENDING.value,
+                    ApprovalProcessStatus.CANCELLED.value,
+                    ApprovalProcessStatus.REJECTED.value
+                ]:
+                    error = change_inactive_offers_status_to_active(
+                        mongo.db,
+                        session,
+                        approval_process['offers']
+                    )
+                    if error is not None:
+                        return None, error
+                updated_approval_process['_id'] = str(updated_approval_process['_id'])
+                for offer in updated_approval_process['offers']:
+                    offer['_id'] = str(offer['_id'])
+                return updated_approval_process, None
     except ConnectionFailure as e:
         return None, {'status_code': 500, 'detail': f'{e}'}
 
