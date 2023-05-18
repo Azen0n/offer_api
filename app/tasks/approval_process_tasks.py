@@ -7,8 +7,10 @@ from celery_app import app
 from database import MongoConnection, MONGODB_URL, MONGO_INITDB_DATABASE
 
 from schemas import ApprovalProcessStatus
-from tasks.utils import product_exists, sale_exists, offers_exists, change_limit_reached_offers_status_to_inactive, \
-    change_inactive_offers_status_to_active
+from tasks.utils import (
+    product_exists, sale_exists, offers_exists,
+    change_approval_process_offers_status
+)
 
 
 @app.task(name='create_approval_process')
@@ -107,26 +109,14 @@ def change_approval_process_status_task(
                     return_document=ReturnDocument.AFTER,
                     session=session
                 )
-                if approval_process_status == ApprovalProcessStatus.APPROVED.value:
-                    error = change_limit_reached_offers_status_to_inactive(
-                        mongo.db,
-                        session,
-                        approval_process['offers']
-                    )
-                    if error is not None:
-                        return None, error
-                elif approval_process_status in [
-                    ApprovalProcessStatus.PENDING.value,
-                    ApprovalProcessStatus.CANCELLED.value,
-                    ApprovalProcessStatus.REJECTED.value
-                ]:
-                    error = change_inactive_offers_status_to_active(
-                        mongo.db,
-                        session,
-                        approval_process['offers']
-                    )
-                    if error is not None:
-                        return None, error
+                error = change_approval_process_offers_status(
+                    mongo.db,
+                    session,
+                    approval_process,
+                    approval_process_status
+                )
+                if error is not None:
+                    return None, error
                 updated_approval_process['_id'] = str(updated_approval_process['_id'])
                 for offer in updated_approval_process['offers']:
                     offer['_id'] = str(offer['_id'])
