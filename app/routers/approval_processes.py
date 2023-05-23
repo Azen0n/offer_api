@@ -34,8 +34,10 @@ async def create_approval_process(
     logger.info(f'Поступил запрос на {create_approval_process.__name__},'
                 f' {approval_process=}')
     approval_process = jsonable_encoder(approval_process)
-    task = create_approval_process_task.delay(approval_process)
-    approval_process, error = task.get()
+    approval_process, error = get_task_result_or_timeout(
+        create_approval_process_task,
+        approval_process
+    )
     if approval_process is None:
         logger.error(f'Ошибка: {error["detail"]}')
         raise HTTPException(**error)

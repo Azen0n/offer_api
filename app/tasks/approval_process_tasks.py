@@ -1,15 +1,16 @@
 from bson import ObjectId
 from pymongo import ReturnDocument
 from pymongo.errors import ConnectionFailure
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from celery_app import app
 from database import MongoConnection, MONGODB_URL, MONGO_INITDB_DATABASE
 
 from schemas import ApprovalProcessStatus
 from tasks.utils import (
-    product_exists, sale_exists, offers_exists,
-    change_approval_process_offers_status
+    change_approval_process_offers_status, validate_create_approval_process,
+    convert_approval_process_objectid_fields_to_str, validate_get_approval_process_offers,
+    validate_approval_process_exists, convert_offers_objectid_fields_to_str, get_offers_by_approval_process_offer_ids,
+    update_approval_process_status,
 )
 
 
@@ -22,31 +23,14 @@ def create_approval_process_task(approval_process: dict) -> tuple[dict | None, d
     """
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
-            if not product_exists(mongo.db, approval_process['product']['id']):
-                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                              'detail': 'Товар не найден'}
-            if not sale_exists(mongo.db, approval_process['sale']['id']):
-                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                              'detail': 'Продажа не найдена'}
-            for offer in approval_process['offers']:
-                offer['_id'] = ObjectId(offer['_id'])
-            offer_ids = [offer['_id'] for offer in approval_process['offers']]
-            if not offers_exists(mongo.db, offer_ids):
-                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                              'detail': 'Одна или более акции не существуют'}
-            existing_approval_process = mongo.db['approval_processes'].find_one(
-                {'sale.id': approval_process['sale']['id']}
-            )
-            if existing_approval_process is not None:
-                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                              'detail': 'Процесс согласования продажи уже существует'}
+            error = validate_create_approval_process(mongo.db, approval_process)
+            if error is not None:
+                return None, error
             new_approval_process = mongo.db['approval_processes'].insert_one(approval_process)
             created_approval_process = mongo.db['approval_processes'].find_one(
                 {'_id': new_approval_process.inserted_id}
             )
-            created_approval_process['_id'] = str(created_approval_process['_id'])
-            for offer in created_approval_process['offers']:
-                offer['_id'] = str(offer['_id'])
+            convert_approval_process_objectid_fields_to_str(created_approval_process)
             return created_approval_process, None
     except ConnectionFailure as e:
         return None, {'status_code': 500, 'detail': f'{e}'}
@@ -62,9 +46,9 @@ def get_approval_process_status_task(sale_id: int) -> tuple[dict | None, dict | 
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
             approval_process = mongo.db['approval_processes'].find_one({'sale.id': sale_id})
-            if approval_process is None:
-                return None, {'status_code': HTTP_404_NOT_FOUND,
-                              'detail': 'Процесс согласования не найден'}
+            error = validate_approval_process_exists(approval_process)
+            if error is not None:
+                return None, error
             return {'status': approval_process['status']}, None
     except ConnectionFailure as e:
         return None, {'status_code': 500, 'detail': f'{e}'}
@@ -82,9 +66,7 @@ def get_approval_processes_task() -> tuple[list[dict] | None, dict | None]:
                 {'status': ApprovalProcessStatus.PENDING.value})
             )
             for approval_process in approval_processes:
-                approval_process['_id'] = str(approval_process['_id'])
-                for offer in approval_process['offers']:
-                    offer['_id'] = str(offer['_id'])
+                convert_approval_process_objectid_fields_to_str(approval_process)
             return approval_processes, None
     except ConnectionFailure as e:
         return None, {'status_code': 500, 'detail': f'{e}'}
@@ -103,29 +85,19 @@ def change_approval_process_status_task(
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
             with mongo.client.start_session() as session:
-                approval_process = mongo.db['approval_processes'].find_one({
-                    'sale.id': sale_id}
-                )
-                if approval_process is None:
-                    return None, {'status_code': HTTP_404_NOT_FOUND,
-                                  'detail': 'Процесс согласования не найден'}
-                updated_approval_process = mongo.db['approval_processes'].find_one_and_update(
-                    {'_id': ObjectId(approval_process['_id'])},
-                    {'$set': {'status': approval_process_status}},
-                    return_document=ReturnDocument.AFTER,
-                    session=session
+                approval_process = mongo.db['approval_processes'].find_one({'sale.id': sale_id})
+                error = validate_approval_process_exists(approval_process)
+                if error is not None:
+                    return None, error
+                updated_approval_process = update_approval_process_status(
+                    mongo.db, session, approval_process, approval_process_status
                 )
                 error = change_approval_process_offers_status(
-                    mongo.db,
-                    session,
-                    approval_process,
-                    approval_process_status
+                    mongo.db, session, approval_process, approval_process_status
                 )
                 if error is not None:
                     return None, error
-                updated_approval_process['_id'] = str(updated_approval_process['_id'])
-                for offer in updated_approval_process['offers']:
-                    offer['_id'] = str(offer['_id'])
+                convert_approval_process_objectid_fields_to_str(updated_approval_process)
                 return updated_approval_process, None
     except ConnectionFailure as e:
         return None, {'status_code': 500, 'detail': f'{e}'}
@@ -143,23 +115,19 @@ def get_approval_process_offers_task(
     Возвращает список Offer в виде словарей и словарь
     с кодом ошибки и описанием. При отсутствии один из элементов равен None.
     """
-    skip_value = (page_number - 1) * page_size
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
             approval_process = mongo.db['approval_processes'].find_one({'sale.id': sale_id})
-            if approval_process is None:
-                return None, {'status_code': HTTP_404_NOT_FOUND,
-                              'detail': 'Процесс согласования не найден'}
-            if approval_process['status'] != ApprovalProcessStatus.APPROVED.value:
-                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
-                              'detail': 'Продажа товара не зафиксирована'}
-            offer_ids = [ObjectId(offer['_id']) for offer in approval_process['offers']]
-            approval_process_offers = list(mongo.db['offers'].find(
-                {'_id': {'$in': offer_ids}},
-                {'compatible_products': {'$slice': [skip_value, page_size]}}
-            ))
-            for offer in approval_process_offers:
-                offer['_id'] = str(offer['_id'])
+            error = validate_get_approval_process_offers(approval_process)
+            if error is not None:
+                return None, error
+            approval_process_offers = get_offers_by_approval_process_offer_ids(
+                mongo.db,
+                approval_process,
+                page_number,
+                page_size
+            )
+            convert_offers_objectid_fields_to_str(approval_process_offers)
             return approval_process_offers, None
     except ConnectionFailure as e:
         return None, {'status_code': 500, 'detail': f'{e}'}
