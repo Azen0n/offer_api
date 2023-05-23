@@ -34,6 +34,12 @@ def create_approval_process_task(approval_process: dict) -> tuple[dict | None, d
             if not offers_exists(mongo.db, offer_ids):
                 return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
                               'detail': 'Одна или более акции не существуют'}
+            existing_approval_process = mongo.db['approval_processes'].find_one(
+                {'sale.id': approval_process['sale']['id']}
+            )
+            if existing_approval_process is not None:
+                return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
+                              'detail': 'Процесс согласования продажи уже существует'}
             new_approval_process = mongo.db['approval_processes'].insert_one(approval_process)
             created_approval_process = mongo.db['approval_processes'].find_one(
                 {'_id': new_approval_process.inserted_id}
