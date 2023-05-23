@@ -22,10 +22,10 @@ def create_approval_process_task(approval_process: dict) -> tuple[dict | None, d
     """
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
-            if not product_exists(mongo.db, approval_process['product']['_id']):
+            if not product_exists(mongo.db, approval_process['product']['id']):
                 return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
                               'detail': 'Товар не найден'}
-            if not sale_exists(mongo.db, approval_process['sale']['_id']):
+            if not sale_exists(mongo.db, approval_process['sale']['id']):
                 return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
                               'detail': 'Продажа не найдена'}
             for offer in approval_process['offers']:
@@ -55,7 +55,7 @@ def get_approval_process_status_task(sale_id: int) -> tuple[dict | None, dict | 
     """
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
-            approval_process = mongo.db['approval_processes'].find_one({'sale._id': sale_id})
+            approval_process = mongo.db['approval_processes'].find_one({'sale.id': sale_id})
             if approval_process is None:
                 return None, {'status_code': HTTP_404_NOT_FOUND,
                               'detail': 'Процесс согласования не найден'}
@@ -98,7 +98,7 @@ def change_approval_process_status_task(
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
             with mongo.client.start_session() as session:
                 approval_process = mongo.db['approval_processes'].find_one({
-                    'sale._id': sale_id}
+                    'sale.id': sale_id}
                 )
                 if approval_process is None:
                     return None, {'status_code': HTTP_404_NOT_FOUND,
@@ -126,16 +126,21 @@ def change_approval_process_status_task(
 
 
 @app.task(name='get_approval_process_offers')
-def get_approval_process_offers_task(sale_id: int) -> tuple[list[dict] | None, dict | None]:
+def get_approval_process_offers_task(
+        sale_id: int,
+        page_number: int,
+        page_size: int
+) -> tuple[list[dict] | None, dict | None]:
     """Получение списка применённых акций к товару (продажа зафиксирована)
     по ID продажи.
 
     Возвращает список Offer в виде словарей и словарь
     с кодом ошибки и описанием. При отсутствии один из элементов равен None.
     """
+    skip_value = (page_number - 1) * page_size
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
-            approval_process = mongo.db['approval_processes'].find_one({'sale._id': sale_id})
+            approval_process = mongo.db['approval_processes'].find_one({'sale.id': sale_id})
             if approval_process is None:
                 return None, {'status_code': HTTP_404_NOT_FOUND,
                               'detail': 'Процесс согласования не найден'}
@@ -143,7 +148,10 @@ def get_approval_process_offers_task(sale_id: int) -> tuple[list[dict] | None, d
                 return None, {'status_code': HTTP_422_UNPROCESSABLE_ENTITY,
                               'detail': 'Продажа товара не зафиксирована'}
             offer_ids = [ObjectId(offer['_id']) for offer in approval_process['offers']]
-            approval_process_offers = list(mongo.db['offers'].find({'_id': {'$in': offer_ids}}))
+            approval_process_offers = list(mongo.db['offers'].find(
+                {'_id': {'$in': offer_ids}},
+                {'compatible_products': {'$slice': [skip_value, page_size]}}
+            ))
             for offer in approval_process_offers:
                 offer['_id'] = str(offer['_id'])
             return approval_process_offers, None

@@ -1,6 +1,7 @@
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from starlette.status import HTTP_201_CREATED, HTTP_200_OK
 
@@ -13,9 +14,12 @@ from tasks.approval_process_tasks import (
     get_approval_processes_task, change_approval_process_status_task,
     get_approval_process_offers_task,
 )
+from utils import get_environment_variable
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+DEFAULT_PAGE_SIZE = int(get_environment_variable('DEFAULT_PAGE_SIZE'))
 
 
 @router.post(
@@ -28,7 +32,7 @@ async def create_approval_process(
 ):
     """Добавление процесса согласования акционной продажи."""
     logger.info(f'Поступил запрос на {create_approval_process.__name__},'
-                 f' {approval_process=}')
+                f' {approval_process=}')
     approval_process = jsonable_encoder(approval_process)
     task = create_approval_process_task.delay(approval_process)
     approval_process, error = task.get()
@@ -49,10 +53,10 @@ async def get_approval_process_status(
     по ID продажи.
     """
     logger.info(f'Поступил запрос на {get_approval_process_status.__name__},'
-                 f' {sale_id=}')
+                f' {sale_id=}')
     approval_process, error = get_task_result_or_timeout(
         get_approval_process_status_task,
-    sale_id
+        sale_id
     )
     if approval_process is None:
         logger.error(f'Ошибка: {error["detail"]}')
@@ -92,7 +96,7 @@ async def change_approval_process_status(
     по ID продажи.
     """
     logger.info(f'Поступил запрос на {change_approval_process_status.__name__},'
-                 f' {sale_id=}, {approval_process_status=}')
+                f' {sale_id=}, {approval_process_status=}')
     updated_approval_process, error = get_task_result_or_timeout(
         change_approval_process_status_task,
         sale_id,
@@ -110,14 +114,24 @@ async def change_approval_process_status(
     response_model=list[Offer]
 )
 async def get_approval_process_offers(
-        sale_id: int
+        sale_id: int,
+        products_page_number: Annotated[int, Query(
+            description='Страница списка подходящих товаров',
+            gt=0
+        )] = 1,
+        products_page_size: Annotated[int, Query(
+            description='Количество товаров на странице в списке подходящих товаров',
+            gt=0
+        )] = DEFAULT_PAGE_SIZE
 ):
     """Получение списка применённых акций к товару (продажа зафиксирована)."""
     logger.info(f'Поступил запрос на {get_approval_process_offers.__name__},'
-                f' {sale_id=}')
+                f' {sale_id=}, {products_page_number=}, {products_page_size}')
     approval_process_offers, error = get_task_result_or_timeout(
         get_approval_process_offers_task,
-        sale_id
+        sale_id,
+        products_page_number,
+        products_page_size
     )
     if approval_process_offers is None:
         logger.error(f'Ошибка: {error["detail"]}')

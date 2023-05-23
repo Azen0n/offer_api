@@ -18,6 +18,7 @@ services:
       - API_KEY_NAME=${API_KEY_NAME}
       - API_KEY=${API_KEY}
       - TIMEOUT_SECONDS=${TIMEOUT_SECONDS}
+      - DEFAULT_PAGE_SIZE=${DEFAULT_PAGE_SIZE}
     depends_on:
       - redis
       - mongodb
@@ -39,6 +40,7 @@ services:
       - MONGODB_URL=${MONGODB_URL}
       - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
       - TIMEOUT_SECONDS=${TIMEOUT_SECONDS}
+      - DEFAULT_PAGE_SIZE=${DEFAULT_PAGE_SIZE}
     depends_on:
       - redis
 

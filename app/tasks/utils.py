@@ -5,7 +5,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from schemas import ApprovalProcessStatus
 from schemas.offer import OfferStatus
-from schemas.product import Product
+from schemas.product import ProductStatus
 
 
 def offers_exists(db: Database, offer_ids: list[ObjectId]) -> bool:
@@ -17,17 +17,21 @@ def offers_exists(db: Database, offer_ids: list[ObjectId]) -> bool:
 
 def product_exists(db: Database, product_id: int) -> bool:
     """Возвращает True, если товар с указанным Id существует."""
-    return db['products'].find_one({'_id': product_id}) is not None
+    return db['products'].find_one({'id': product_id}) is not None
 
 
 def sale_exists(db: Database, sale_id: int) -> bool:
     """Возвращает True, если продажа с указанным Id существует."""
-    return db['sales'].find_one({'_id': sale_id}) is not None
+    return db['sales'].find_one({'id': sale_id}) is not None
 
 
-def find_compatible_products() -> list[Product]:
+def find_compatible_products(db: Database) -> list[dict]:
     """Возвращает совместимые по параметрам товары."""
-    compatible_products = []
+    compatible_products = list(db['products'].find({
+        'status': ProductStatus.AVAILABLE.value
+    }))
+    compatible_products = [{'id': product['id'], 'status': product['status']}
+                            for product in compatible_products]
     return compatible_products
 
 

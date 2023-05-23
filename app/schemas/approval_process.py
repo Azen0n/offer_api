@@ -4,9 +4,9 @@ from bson import ObjectId
 from pydantic import BaseModel, Field
 
 from .offer import OfferId
-from .product import Product
+from .product import Product, ProductId
 from .pyobjectid import PyObjectId
-from .sale import Sale
+from .sale import SaleId
 
 
 class ApprovalProcessStatus(str, Enum):
@@ -20,9 +20,9 @@ class ApprovalProcess(BaseModel):
     """Процесс согласования акционной продажи."""
     id: PyObjectId = Field(default_factory=PyObjectId, alias='_id')
     status: ApprovalProcessStatus = Field(..., description=f'Статус согласования')
-    product: Product = Field(..., description='Товар')
+    product: ProductId = Field(..., description='Товар')
     offers: list[OfferId] = Field(..., description='Применяемые к товару акции')
-    sale: Sale = Field(..., description='ID продажи')
+    sale: SaleId = Field(..., description='ID продажи')
 
     class Config:
         json_encoders = {ObjectId: str}
@@ -32,9 +32,9 @@ class ApprovalProcess(BaseModel):
 class CreateApprovalProcess(BaseModel):
     """Схема создания процесса согласования акционной продажи."""
     status: ApprovalProcessStatus = Field(..., description=f'Статус согласования')
-    product: Product = Field(..., description='Товар')
+    product: ProductId = Field(..., description='Товар')
     offers: list[OfferId] = Field(..., description='Применяемые к товару акции')
-    sale: Sale = Field(..., description='ID продажи')
+    sale: SaleId = Field(..., description='ID продажи')
 
     class Config:
         json_encoders = {ObjectId: str}
