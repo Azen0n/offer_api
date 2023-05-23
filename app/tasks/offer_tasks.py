@@ -1,3 +1,5 @@
+import datetime
+
 from bson import ObjectId
 from pymongo import ReturnDocument
 from pymongo.errors import ConnectionFailure
@@ -7,7 +9,7 @@ from celery_app import app
 from schemas import OfferStatus
 
 from database import MongoConnection, MONGODB_URL, MONGO_INITDB_DATABASE
-from tasks.utils import find_compatible_products
+from tasks.utils import find_compatible_products, convert_offer_dates_to_datetime
 from utils import get_environment_variable
 
 DEFAULT_PAGE_SIZE = int(get_environment_variable('DEFAULT_PAGE_SIZE'))
@@ -42,6 +44,7 @@ def create_offer_task(offer: dict) -> tuple[dict | None, dict | None]:
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
             offer['compatible_products'] = find_compatible_products(mongo.db)
+            convert_offer_dates_to_datetime(offer)
             new_offer = mongo.db['offers'].insert_one(offer)
             created_offer = mongo.db['offers'].find_one(
                 {'_id': new_offer.inserted_id}
@@ -63,6 +66,7 @@ def update_offer_task(offer_id: str, offer: dict) -> tuple[dict | None, dict | N
     try:
         with MongoConnection(MONGODB_URL, MONGO_INITDB_DATABASE) as mongo:
             offer['compatible_products'] = find_compatible_products(mongo.db)
+            convert_offer_dates_to_datetime(offer)
             updated_offer = mongo.db['offers'].find_one_and_update(
                 {'_id': ObjectId(offer_id)},
                 {'$set': offer},

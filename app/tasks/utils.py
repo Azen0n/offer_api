@@ -1,3 +1,5 @@
+import datetime
+
 from bson import ObjectId
 from pymongo.client_session import ClientSession
 from pymongo.database import Database
@@ -31,7 +33,7 @@ def find_compatible_products(db: Database) -> list[dict]:
         'status': ProductStatus.AVAILABLE.value
     }))
     compatible_products = [{'id': product['id'], 'status': product['status']}
-                            for product in compatible_products]
+                           for product in compatible_products]
     return compatible_products
 
 
@@ -52,7 +54,8 @@ def change_limit_reached_offers_status_to_inactive(
         if number_of_applications >= offer['application_limit']:
             db['offers'].find_one_and_update(
                 {'_id': offer['_id']},
-                {'$set': {'status': OfferStatus.INACTIVE.value}},
+                {'$set': {'status': OfferStatus.INACTIVE.value,
+                          'end_date': datetime.datetime.now()}},
                 session=session
             )
 
@@ -74,7 +77,8 @@ def change_inactive_offers_status_to_active(
         if number_of_applications < offer['application_limit']:
             db['offers'].find_one_and_update(
                 {'_id': offer['_id']},
-                {'$set': {'status': OfferStatus.ACTIVE.value}},
+                {'$set': {'status': OfferStatus.ACTIVE.value,
+                          'end_date': None}},
                 session=session
             )
 
@@ -125,3 +129,17 @@ def is_approved_status_changed(
         ApprovalProcessStatus.REJECTED.value
     ]
     return is_status_approved and is_new_status_not_approved
+
+
+def convert_offer_dates_to_datetime(offer: dict):
+    """Переводит start_date и end_time акции в объект datetime."""
+    date_format = '%Y-%m-%dT%H:%M:%S'
+    offer['start_date'] = datetime.datetime.strptime(
+        offer['start_date'],
+        date_format
+    )
+    if offer['end_date'] is not None:
+        offer['end_date'] = datetime.datetime.strptime(
+            offer['end_date'],
+            date_format
+        )
